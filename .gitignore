@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data (too large for git, excluded entirely)
+data/
