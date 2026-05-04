@@ -20,3 +20,6 @@ env/
 
 # Data (too large for git, excluded entirely)
 data/
+
+# Model checkpoints (large binary files)
+checkpoints/
