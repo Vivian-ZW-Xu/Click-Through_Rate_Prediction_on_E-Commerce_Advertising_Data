@@ -53,7 +53,7 @@ See `preprocessing_section.docx` for full preprocessing details.
 
 The processed parquets (~5 GB total) are not committed to the repo. To regenerate them from scratch:
 
-1. Download the raw CSVs from the [Alimama Tianchi dataset](https://tianchi.aliyun.com/dataset/56) and place them under `data/raw/`:
+1. Download the raw CSVs from the [Alibaba Tianchi dataset](https://tianchi.aliyun.com/dataset/56) and place them under `data/raw/`:
    `raw_sample.csv`, `ad_feature.csv`, `user_profile.csv`, `behavior_log.csv`
 
 2. Convert CSVs to parquet:
