@@ -4,6 +4,8 @@ Dependencies in `requirements.txt`. Python 3.11.
 
 ## Loading the Preprocessed Data
 
+The processed parquet files are not in the repo (~5 GB total). See [Reproducing the Data](#reproducing-the-data) below to regenerate them. Once they exist under `data/processed/wide/`:
+
 ```python
 import polars as pl
 from pathlib import Path
@@ -46,3 +48,31 @@ Time-based, UTC midnight cutoffs (no shuffling):
 - Test:  2017-05-13 00:00 — 2017-05-13 11:59 UTC (12 hours, 11%)
 
 See `preprocessing_section.docx` for full preprocessing details.
+
+## Reproducing the Data
+
+The processed parquets (~5 GB total) are not committed to the repo. To regenerate them from scratch:
+
+1. Download the raw CSVs from the [Alimama Tianchi dataset](https://tianchi.aliyun.com/dataset/56) and place them under `data/raw/`:
+   `raw_sample.csv`, `ad_feature.csv`, `user_profile.csv`, `behavior_log.csv`
+
+2. Convert CSVs to parquet:
+
+   ```
+   python convert.py
+   ```
+
+   This writes `data/processed/{raw_sample,ad_feature,user_profile,behavior_log}.parquet`.
+
+3. Run the notebooks **in order** — each one overwrites `data/processed/wide/*.parquet`:
+
+   1. `notebooks/preprocessing.ipynb` — joins, cleaning, ID encoding, time-based split, basic CTR aggregates (→ A=26 cols, B=25 cols)
+   2. `notebooks/behavior_features.ipynb` — adds 7 `user_total_*` features and `user_cate_ctr` (→ A=34, B=33)
+   3. `notebooks/din_sequences.ipynb` — adds `behavior_seq` (→ A=35, B=34)
+
+4. Train:
+
+   ```
+   python scripts/train_deepfm.py
+   python scripts/train_din.py
+   ```
