@@ -222,3 +222,11 @@ testLogloss = log_loss(testA_y, testPreds)
 
 print(f'\nTest AUC:      {testAuc:.4f}')
 print(f'Test Logloss:  {testLogloss:.4f}')
+
+
+# %% Save predictions for cross-model analysis
+PREDS_DIR = Path(CHECKPOINT_PATH).parent
+PREDS_DIR.mkdir(parents=True, exist_ok=True)
+np.save(PREDS_DIR / 'preds_din.npy', testPreds)
+np.save(PREDS_DIR / 'test_labels.npy', testA_y)
+print(f'Predictions saved → {PREDS_DIR / "preds_din.npy"}')

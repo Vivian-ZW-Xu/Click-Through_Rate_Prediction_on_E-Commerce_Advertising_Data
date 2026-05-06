@@ -1,9 +1,14 @@
-"""Train DeepFM on Version A of the Alimama wide table.
+"""Train Wide & Deep on Version A of the Alimama wide table.
 
-DeepFM = FM (auto 2-way feature crossing) + Deep component (MLP).
-No behavior sequence input (DeepFM is a static-feature model).
+Wide (linear) part:  captures memorization — a scalar weight per category value
+                     (embedding_dim=1), equivalent to a regularized one-hot lookup.
+Deep (DNN) part:     learns feature interactions — full embeddings (dim=16) fed
+                     into an MLP.
 
-Run: `python scripts/train_deepfm.py` from project root.
+No behavior sequence — static features only, same input as DeepFM for a fair
+ablation (Wide & Deep vs DeepFM vs DIN).
+
+Run: `python scripts/train_wide_deep.py`
 """
 
 # %% Setup
@@ -34,7 +39,7 @@ print(f'valA:   {valA.shape}')
 print(f'testA:  {testA.shape}')
 
 
-# %% Feature lists + vocab sizes
+# %% Feature lists + vocab sizes (identical to DeepFM for fair comparison)
 SPARSE_FEATURES = [
     'user', 'adgroup_id', 'pid', 'cate_id', 'campaign_id', 'customer',
     'cms_segid', 'cms_group_id', 'final_gender_code', 'age_level',
@@ -42,8 +47,8 @@ SPARSE_FEATURES = [
     'has_profile', 'hour', 'day_of_week',
 ]
 
-# Same rationale as DIN: CTR aggregates cause within-train leakage with
-# high-cardinality embeddings. Keep counts and behavior_log aggregates.
+# CTR aggregates excluded: same rationale as DIN/DeepFM — within-train leakage
+# when high-cardinality embeddings and per-entity CTR stats share the same labels.
 DENSE_FEATURES = [
     'price', 'log_price',
     'user_imp_count',
@@ -57,12 +62,15 @@ for col in SPARSE_FEATURES:
     maxVal = max(trainA[col].max(), valA[col].max(), testA[col].max())
     vocabSizes[col] = int(maxVal) + 1
 
-print(f'{len(SPARSE_FEATURES)} sparse + {len(DENSE_FEATURES)} dense (no sequence for DeepFM)')
+print(f'{len(SPARSE_FEATURES)} sparse + {len(DENSE_FEATURES)} dense')
+print('\nVocab sizes:')
+for col, v in vocabSizes.items():
+    print(f'  {col:25s}: {v:>10,}')
 
 
-# %% Build input dicts (no behavior_seq for DeepFM)
+# %% Build input dicts (same format as DeepFM)
 def buildInputDict(df):
-    """DeepFM input format: dict {feature_name: np.array}, all float32 for MPS compat."""
+    """All arrays as float32 for MPS compatibility (same as DIN/DeepFM)."""
     d = {}
     for col in SPARSE_FEATURES:
         d[col] = df[col].to_numpy().astype(np.float32)
@@ -82,25 +90,30 @@ testA_y  = testA['clk'].to_numpy().astype(np.float32)
 print(f'\nTrain: {len(trainA_y):,} | Val: {len(valA_y):,} | Test: {len(testA_y):,}')
 
 
-# %% Build DeepFM model
-from deepctr_torch.models import DeepFM
+# %% Build Wide & Deep model
+from deepctr_torch.models import WDL
 from deepctr_torch.inputs import SparseFeat, DenseFeat
 
 EMBED_DIM = 16
 
-featureColumns = [
+# Wide part: embedding_dim=1 gives one scalar weight per category value —
+# this is the "memorization" component (fast lookup of per-entity bias).
+linear_feature_columns = [
+    SparseFeat(col, vocabulary_size=vocabSizes[col], embedding_dim=1)
+    for col in SPARSE_FEATURES
+]
+linear_feature_columns += [DenseFeat(col, 1) for col in DENSE_FEATURES]
+
+# Deep part: full-rank embeddings fed into MLP — the "generalization" component.
+dnn_feature_columns = [
     SparseFeat(col, vocabulary_size=vocabSizes[col], embedding_dim=EMBED_DIM)
     for col in SPARSE_FEATURES
 ]
-featureColumns += [DenseFeat(col, 1) for col in DENSE_FEATURES]
+dnn_feature_columns += [DenseFeat(col, 1) for col in DENSE_FEATURES]
 
-# DeepFM combines:
-#   - linear part (1st-order)
-#   - FM part (2nd-order feature interactions, shared embedding)
-#   - DNN part (higher-order via MLP)
-model = DeepFM(
-    linear_feature_columns=featureColumns,
-    dnn_feature_columns=featureColumns,
+model = WDL(
+    linear_feature_columns=linear_feature_columns,
+    dnn_feature_columns=dnn_feature_columns,
     dnn_hidden_units=(256, 128),
     dnn_dropout=0.5,
     task='binary',
@@ -126,20 +139,14 @@ smokeInput = {k: v[:SMOKE_N] for k, v in trainA_input.items()}
 smokeY = trainA_y[:SMOKE_N]
 
 t0 = time.time()
-model.fit(
-    x=smokeInput,
-    y=smokeY,
-    batch_size=2048,
-    epochs=1,
-    verbose=2,
-)
-print(f'Smoke test done in {time.time()-t0:.1f}s.')
+model.fit(x=smokeInput, y=smokeY, batch_size=2048, epochs=1, verbose=2)
+print(f'Smoke test done in {time.time()-t0:.1f}s. If you see an AUC line above, pipeline works.')
 
 
 # %% Full training with early stopping on val
 from deepctr_torch.callbacks import EarlyStopping, ModelCheckpoint
 
-CHECKPOINT_PATH = '../checkpoints/deepfm_versionA.pt' if Path('..').name == 'scripts' else 'checkpoints/deepfm_versionA.pt'
+CHECKPOINT_PATH = '../checkpoints/wide_deep_versionA.pt' if Path('..').name == 'scripts' else 'checkpoints/wide_deep_versionA.pt'
 Path(CHECKPOINT_PATH).parent.mkdir(parents=True, exist_ok=True)
 
 earlyStop = EarlyStopping(monitor='val_auc', patience=2, mode='max')
@@ -169,16 +176,16 @@ print('Loading best checkpoint and predicting on test...')
 model.load_state_dict(torch.load(CHECKPOINT_PATH))
 
 testPreds = model.predict(testA_input, batch_size=4096)
-testAuc = roc_auc_score(testA_y, testPreds)
-testLogloss = log_loss(testA_y, testPreds)
+testAuc  = roc_auc_score(testA_y, testPreds)
+testLoss = log_loss(testA_y, testPreds)
 
 print(f'\nTest AUC:      {testAuc:.4f}')
-print(f'Test Logloss:  {testLogloss:.4f}')
+print(f'Test Logloss:  {testLoss:.4f}')
 
 
 # %% Save predictions for cross-model analysis
-PREDS_DIR = Path(CHECKPOINT_PATH).parent
+PREDS_DIR = Path('../checkpoints') if Path('..').name == 'scripts' else Path('checkpoints')
 PREDS_DIR.mkdir(parents=True, exist_ok=True)
-np.save(PREDS_DIR / 'preds_deepfm.npy', testPreds)
+np.save(PREDS_DIR / 'preds_wide_deep.npy', testPreds)
 np.save(PREDS_DIR / 'test_labels.npy', testA_y)
-print(f'Predictions saved → {PREDS_DIR / "preds_deepfm.npy"}')
+print(f'Predictions saved → {PREDS_DIR / "preds_wide_deep.npy"}')
