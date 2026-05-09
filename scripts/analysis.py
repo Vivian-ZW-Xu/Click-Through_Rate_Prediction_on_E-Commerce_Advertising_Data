@@ -303,18 +303,21 @@ for m in MODELS:
 ax.set_xlabel('Mean predicted probability')
 ax.set_ylabel('Fraction of positives (true CTR)')
 ax.set_title('Calibration curves (reliability diagram)')
+ax.set_xlim(0, 0.3)
+ax.set_ylim(0, 0.2)
 ax.legend(fontsize=9)
 
 # Right: distribution of predicted probabilities per model
 ax = axes[1]
 for m in MODELS:
     ax.hist(allPreds[m], bins=50, alpha=0.5, density=True,
-            label=m, color=COLORS.get(m))
+            label=m, color=COLORS.get(m), range=(0, 0.3))
 ax.axvline(testY.mean(), color='black', linestyle='--',
            label=f'True CTR ({testY.mean():.3f})', linewidth=1.5)
 ax.set_xlabel('Predicted probability')
 ax.set_ylabel('Density')
 ax.set_title('Predicted score distributions')
+ax.set_xlim(0, 0.3)
 ax.legend(fontsize=9)
 
 plt.suptitle('D2a — Model Calibration', fontsize=13)
@@ -326,12 +329,14 @@ print('Saved → D2a_calibration.png')
 
 # %% D2b — AUC by decile of key features (best model only)
 # Reveals which feature ranges the best model handles worst.
-auditFeats = ['user_imp_count', 'user_total_events', 'ad_ctr', 'user_cate_ctr']
+auditFeats = ['user_ctr', 'user_cate_ctr', 'ad_ctr', 'user_imp_count']
 N_BINS = 10
+Y_LIM = (0.45, 0.80)   # unified y-axis across subplots for fair comparison
 
-fig, axes = plt.subplots(1, len(auditFeats), figsize=(5 * len(auditFeats), 4))
-if len(auditFeats) == 1:
-    axes = [axes]
+fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharey=True)
+axes = axes.flatten()
+
+overallAuc = roc_auc_score(testY, allPreds[bestModel])
 
 for ax, col in zip(axes, auditFeats):
     vals = testA[col].to_numpy().astype(float)
@@ -345,11 +350,14 @@ for ax, col in zip(axes, auditFeats):
             bin_mids.append((lo + hi) / 2)
             bin_sizes.append(mask.sum())
     ax.plot(bin_mids, bin_aucs, marker='o', color=COLORS.get(bestModel, 'steelblue'))
-    ax.axhline(roc_auc_score(testY, allPreds[bestModel]), color='gray',
-               linestyle='--', linewidth=1, label='Overall AUC')
-    ax.set_xlabel(col); ax.set_ylabel('AUC'); ax.set_title(col)
-    ax.legend(fontsize=8)
+    ax.axhline(overallAuc, color='gray', linestyle='--', linewidth=1,
+               label=f'Overall AUC ({overallAuc:.3f})')
+    ax.set_xlabel(col); ax.set_title(col)
+    ax.set_ylim(*Y_LIM)
+    ax.legend(fontsize=8, loc='lower right')
 
+axes[0].set_ylabel('AUC')
+axes[2].set_ylabel('AUC')
 plt.suptitle(f'D2b — {bestModel}: AUC by Feature Decile', fontsize=13)
 plt.tight_layout()
 plt.savefig(FIG_DIR / 'D2b_auc_by_decile.png', bbox_inches='tight')
