@@ -1,0 +1,21 @@
+{
+  "grain": "completed Beijing dates before each impression date",
+  "source_splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "entities": {
+    "user": "user_raw",
+    "ad": "adgroup_id_raw",
+    "category": "cate_id_raw",
+    "campaign": "campaign_id_raw",
+    "customer": "customer_raw",
+    "brand": "brand_raw"
+  },
+  "smoothing_strength": 100.0,
+  "initial_prior": 0.05,
+  "first_training_date_behavior": "all entity histories empty; fixed initial prior only",
+  "test_history": "includes all completed dates before test, including validation date",
+  "output_directory": "/Users/vivian_hsu/Desktop/2026_Spring/1003/project/final_project/data/processed/past_ctr"
+}
