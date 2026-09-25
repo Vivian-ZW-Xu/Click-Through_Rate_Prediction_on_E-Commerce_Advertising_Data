@@ -1,25 +1,39 @@
-# macOS
+# macOS and editors
 .DS_Store
-
-# IDE / editors
 .vscode/
 .idea/
 *.swp
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 .ipynb_checkpoints/
 *.egg-info/
+.pytest_cache/
 
-# Virtual environments
+# Environments
 .venv/
 venv/
 env/
 
-# Data (too large for git, excluded entirely)
+# Raw and generated data
 data/
 
-# Model checkpoints (large binary files)
+# Large model and prediction artifacts
+artifacts/models/
+artifacts/predictions/
+artifacts/encoders/mappings/
 checkpoints/
+*.joblib
+*.pkl
+*.pt
+*.pth
+*.ckpt
+*.npy
+
+# Temporary experiment outputs
+results/logistic_regression_smoke/
+
+# Local legacy backups
+*_old_pre*

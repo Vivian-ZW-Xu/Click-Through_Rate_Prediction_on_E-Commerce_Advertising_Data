@@ -1,179 +1,100 @@
-# Click-Through Rate Prediction on E-Commerce Advertising Data
+# Point-in-Time CTR Prediction on E-Commerce Advertising Data
 
-An empirical study comparing five CTR prediction models — Logistic Regression, LightGBM,
-Wide & Deep, DeepFM, and DIN — on the Alibaba Taobao Display Advertising Dataset.
+A leakage-free CTR prediction and evaluation system built on the Alibaba Taobao Display Advertising Dataset.
 
-**Final paper for DS-GA 1003 (Spring 2026), New York University.**
+The project separates information gain, model-family gain, sequence gain, calibration, cold-start robustness, temporal robustness, and engineering cost.
 
-- **Authors**: Zhuwei Xu, Chuhan Ku (Center for Data Science, NYU)
-- **Paper**: [`MLProject.pdf`](MLProject.pdf)
+## Data Protocol
 
+All date boundaries use Beijing time (`Asia/Shanghai`).
 
-## Headline Results
+| Split | Beijing dates | Purpose |
+|---|---|---|
+| Train | 2017-05-06 to 2017-05-11 | model fitting |
+| Validation | 2017-05-12 | model selection and diagnosis |
+| Test | 2017-05-13 | frozen final reporting |
 
-Test-set performance on Alibaba Taobao Display Advertising (2.85M test impressions, 5.04% CTR):
+Main experiments use all 26,557,961 impressions without negative downsampling.
 
-| Model        | AUC    | LogLoss | GAUC   |
-|--------------|--------|---------|--------|
-| LR           | 0.5779 | 0.2552  | 0.5382 |
-| LightGBM     | 0.5973 | 0.1985  | 0.5439 |
-| Wide & Deep  | 0.6123 | 0.2067  | 0.5451 |
-| DeepFM       | 0.6211 | 0.2014  | 0.5504 |
-| **DIN**      | **0.6235** | **0.1957** | **0.5525** |
+Point-in-time rules:
 
-Key findings (see paper):
+- joins use raw IDs;
+- encoding occurs only after joins;
+- encoders and scalers are fitted on training data only;
+- behavior features use completed dates before the impression date;
+- current and future labels are never used as features;
+- identity checks verify that histories belong to the correct raw user.
 
-- **60% of clicks are missed by every model**, concentrating on cold-start users
-- **DIN's attention favors semantic relevance over recency** (flat distribution across positions)
-- **Sample-complexity curves** show that classical baselines saturate well below deep
-  models even at full training data — the remaining headroom is *representational*,
-  not data-driven
-- Classical (LR, LightGBM) and deep (DeepFM, DIN) models capture qualitatively
-  different click sub-populations, suggesting ensembling has untapped potential
+## Current Pipeline
 
-
-## Repository Structure
-
-```
-final_project/
-├── data/                       (gitignored — see Reproducing below)
-│   ├── raw/                    raw CSVs from Tianchi
-│   └── processed/              parquet conversions and wide tables
-├── notebooks/                  preprocessing pipeline
-│   ├── preprocessing.ipynb     joins, cleaning, encoding, time split
-│   ├── behavior_features.ipynb user_total_* + user_cate_ctr aggregates
-│   └── din_sequences.ipynb     50-step behavior sequences for DIN
-├── scripts/                    training + analysis
-│   ├── train_lr.py             classical baseline (sklearn SGDClassifier)
-│   ├── train_lgbm.py           LightGBM with native categoricals
-│   ├── train_wide_deep.py      Wide & Deep
-│   ├── train_deepfm.py         DeepFM (FM + DNN)
-│   ├── train_din.py            DIN (attention over behavior sequence)
-│   └── analysis.py             D1–D4 + sample complexity + per-segment AUC
-├── checkpoints/                (gitignored — model weights ~1 GB)
-├── figures/
-│   ├── dataset/                user_activity, ctr_by_hour
-│   └── analysis/               D1a–d, D2a–c, D3, D4a–c, segment, sample_complexity
-├── convert.py                  CSV → parquet
-├── requirements.txt
-├── MLProject.pdf               Final paper (8 pages + appendix)
-└── README.md
-```
-
-
-## Models
-
-We compare 5 CTR models spanning four sources of representational capacity:
-
-| Model        | Adds                                | Why included                                                             |
-|--------------|-------------------------------------|--------------------------------------------------------------------------|
-| LR           | linear weights                      | Interpretable lower-bound baseline                                       |
-| LightGBM     | + nonlinearity (tree splits)        | Isolates value of nonlinearity without embeddings                        |
-| Wide & Deep  | + dense ID embeddings               | Tests gain from learned embeddings on top of nonlinearity                |
-| DeepFM       | + automatic feature interaction (FM) | Tests if learned FM beats hand-crafted Wide & Deep crosses              |
-| DIN          | + attention over behavior sequence  | Tests gain from sequence-aware user-interest modeling                    |
-
-CTR aggregate features (`user_ctr`, `ad_ctr`, etc.) are used for LR/LightGBM but
-**excluded** from the three deep models, because combining high-cardinality ID
-embeddings with per-entity CTR statistics derived from the same training labels
-causes severe within-train label leakage (train AUC > 0.9, val AUC < 0.6).
-
-
-## Splits
-
-Strict time-based, no shuffling:
-
-- **Train**: 2017-05-05 12:00 — 2017-05-12 00:00 UTC (20.4M impressions, 77%)
-- **Val**:   2017-05-12 (3.27M, 12%)
-- **Test**:  2017-05-13 00:00 — 2017-05-13 11:59 UTC (2.85M, 11%)
-
-All aggregate statistics are computed on the training split only and joined to
-val/test as features, ensuring no test-time labels enter the feature pipeline.
-
-
-## Reproducing the Pipeline
-
-The processed parquets (~5 GB total) and trained checkpoints (~1 GB) are not
-committed to the repo (gitignored). Reproduction takes roughly an hour end-to-end
-on a workstation with an Apple M4 Max or comparable GPU.
-
-### 1. Download raw data
-
-[Alibaba Tianchi dataset](https://tianchi.aliyun.com/dataset/56) → place under
-`data/raw/`:
-
-- `raw_sample.csv` (impression logs)
-- `ad_feature.csv` (ad metadata)
-- `user_profile.csv` (user demographics)
-- `behavior_log.csv` (~22 GB, behavioral history)
-
-### 2. Convert CSVs to parquet
+Run from the repository root:
 
 ```bash
-python convert.py
+python src/01_validate_raw.py
+python src/02_profile_raw.py
+python src/03_build_base_tables.py
+python src/04_build_daily_behavior.py
+python src/05_build_behavior_features.py
+python src/05b_check_behavior_identity.py
+python src/06_profile_model_features.py
+python src/07_build_model_inputs.py
+python src/08_train_logistic_regression.py
+python src/09_diagnose_lr_calibration.py
 ```
 
-Writes `data/processed/{raw_sample,ad_feature,user_profile,behavior_log}.parquet`.
+| Step | Purpose |
+|---|---|
+| 01 | validate raw schemas, labels, keys, and timestamps |
+| 02 | profile missing values, prices, and behavior dates |
+| 03 | join static tables and create Beijing-time splits |
+| 04 | aggregate behavior by raw user and Beijing date |
+| 05 | construct leakage-free 1/3/7/14-day behavior features |
+| 05b | verify user identity in behavior features |
+| 06 | define and profile the model feature schema |
+| 07 | build train-only encodings and model inputs |
+| 08 | train the out-of-core Logistic Regression baseline |
+| 09 | diagnose ranking and probability calibration |
 
-### 3. Run preprocessing notebooks (in order)
+## Repository Layout
 
-Each notebook overwrites `data/processed/wide/*.parquet` with additional columns:
-
-```
-notebooks/preprocessing.ipynb       → joins, cleaning, encoding, basic CTR aggregates
-                                      (output: A=26 cols, B=25 cols)
-notebooks/behavior_features.ipynb   → adds user_total_* and user_cate_ctr
-                                      (output: A=34, B=33)
-notebooks/din_sequences.ipynb       → adds behavior_seq (50-step cate history)
-                                      (output: A=35, B=34)
-```
-
-The paper uses **Version A** (with `has_profile` flag for orphan users); Version B
-is provided for ablation.
-
-### 4. Train models
-
-```bash
-python scripts/train_lr.py            # ~5 min, CPU
-python scripts/train_lgbm.py          # ~10 min, CPU
-python scripts/train_wide_deep.py     # ~20 min, MPS/GPU
-python scripts/train_deepfm.py        # ~20 min, MPS/GPU
-python scripts/train_din.py           # ~30 min, MPS/GPU
+```text
+data/                 local data; ignored by Git
+src/                  pipeline and training entry points
+artifacts/            encoders, models, and predictions
+results/              small metric and validation reports
+docs/                 experimental protocol
+requirements.txt      implemented dependencies
 ```
 
-Each script saves the best-val-AUC checkpoint to `checkpoints/*.pt` (or
-`checkpoints/*.txt`/`*.pkl`) plus per-model test predictions to
-`checkpoints/preds_*.npy`.
+Large datasets, mapping tables, trained models, and predictions are not committed. Small manifests, metrics, and diagnostic tables are committed.
 
-### 5. Run analysis
+## Information Layers
 
-```bash
-python scripts/analysis.py
-```
+- **F1 — Static/context:** user, ad, category, campaign, advertiser, brand, placement, user profile, price, hour, and validated calendar features.
+- **F2 — Historical behavior:** leakage-free page-view, favorite, cart, purchase, and recency features over 1/3/7/14-day windows.
+- **F3 — Past-only click feedback:** smoothed historical click statistics using only dates before the prediction date.
+- **F4 — Behavior sequence:** timestamp-valid category, brand, action, and time-gap histories.
 
-Produces all figures under `figures/analysis/` (D1–D4, sample complexity,
-per-segment AUC) and prints summary numbers to stdout.
+## Planned Models
 
+- Logistic Regression
+- LightGBM
+- Wide & Deep
+- DeepFM
+- DIN
 
-## Dependencies
+LR and LightGBM measure F1/F2/F3 information gain. LR, LightGBM, Wide & Deep, DeepFM, and a sequence-free DIN backbone are compared under a common observable-information budget. DIN sequence variants are evaluated separately because they receive additional sequential information.
 
-See `requirements.txt`. Tested with Python 3.11.
+## Evaluation
 
-Key libraries:
-- `polars` — fast parquet I/O and aggregation
-- `torch` + `deepctr-torch` — DIN, DeepFM, Wide & Deep
-- `lightgbm` — LightGBM (requires `libomp` on macOS: `brew install libomp`)
-- `scikit-learn` — LR, metrics
-- `shap` — SHAP analysis for D4b
-- `matplotlib` — figures
+Core evaluation includes LogLoss, AUC, GAUC, PR-AUC, COPC, reliability curves, cold-start segments, model size, and inference throughput.
 
-Deep models trained with Apple MPS (`PYTORCH_ENABLE_MPS_FALLBACK=1` set in
-training scripts to allow CPU fallback for unsupported ops).
+Post-training Platt scaling and isotonic regression are fitted on validation predictions and evaluated on the frozen test date. Calibration improvement is reported separately from ranking improvement.
 
+See [`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) for the fixed experimental plan.
 
-## Authors
+## Current Status
 
-- **Zhuwei Xu** — `zx2188@nyu.edu`, Center for Data Science, NYU
-- **Chuhan Ku** — `ck3504@nyu.edu`, Center for Data Science, NYU
+The point-in-time preprocessing and common tabular model-input pipeline are complete. The current phase is stabilizing the LR baseline before building the shared evaluator and past-only CTR features.
 
-DS-GA 1003 *Machine Learning* (Spring 2026), New York University.
+Previous outputs are preserved on the `archive/v1-original` branch and are not used as evidence for this rebuilt pipeline.

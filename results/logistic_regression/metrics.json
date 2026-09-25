@@ -1,0 +1,37 @@
+{
+  "run_name": "logistic_regression",
+  "mode": "full",
+  "best_epoch": 2,
+  "selection_metric": "validation_log_loss",
+  "hyperparameters": {
+    "epochs_requested": 2,
+    "batch_size": 200000,
+    "alpha": 1e-06,
+    "loss": "log_loss",
+    "penalty": "l2",
+    "learning_rate": "optimal",
+    "average_sgd": true,
+    "class_weight": null,
+    "random_seed": 42
+  },
+  "validation": {
+    "rows": 3234051,
+    "clicks": 159437,
+    "positive_rate": 0.049299469921779214,
+    "mean_prediction": 0.059192828834056854,
+    "auc": 0.6026370559142656,
+    "log_loss": 0.19433825733718538,
+    "pr_auc": 0.0725001081422028,
+    "brier_score": 0.04665054753422737
+  },
+  "test": {
+    "rows": 3308665,
+    "clicks": 166490,
+    "positive_rate": 0.05031938863559774,
+    "mean_prediction": 0.05042335391044617,
+    "auc": 0.5964488189696024,
+    "log_loss": 0.196693291170192,
+    "pr_auc": 0.07141167571815629,
+    "brier_score": 0.047509532421827316
+  }
+}
