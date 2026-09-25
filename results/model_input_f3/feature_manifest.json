@@ -1,0 +1,43 @@
+{
+  "base_information": "F1+F2 from data/processed/model_input",
+  "added_information": "F3 past-only smoothed CTR statistics",
+  "numeric_features": [
+    "global_past_ctr",
+    "user_past_ctr",
+    "user_past_impressions_log",
+    "ad_past_ctr",
+    "ad_past_impressions_log",
+    "category_past_ctr",
+    "category_past_impressions_log",
+    "campaign_past_ctr",
+    "campaign_past_impressions_log",
+    "customer_past_ctr",
+    "customer_past_impressions_log",
+    "brand_past_ctr",
+    "brand_past_impressions_log"
+  ],
+  "binary_features": [
+    "user_has_past_feedback",
+    "ad_has_past_feedback",
+    "category_has_past_feedback",
+    "campaign_has_past_feedback",
+    "customer_has_past_feedback",
+    "brand_has_past_feedback"
+  ],
+  "excluded_raw_components": [
+    "user_past_clicks",
+    "ad_past_clicks",
+    "category_past_clicks",
+    "campaign_past_clicks",
+    "customer_past_clicks",
+    "brand_past_clicks",
+    "user_past_impressions",
+    "ad_past_impressions",
+    "category_past_impressions",
+    "campaign_past_impressions",
+    "customer_past_impressions",
+    "brand_past_impressions"
+  ],
+  "count_transformation": "log1p(past impressions)",
+  "reason_for_excluding_raw_clicks": "past CTR plus evidence count is sufficient; raw clicks would be redundant"
+}
