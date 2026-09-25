@@ -43,10 +43,25 @@ from sklearn.metrics import (
 from sklearn.preprocessing import StandardScaler
 
 
-INPUT_DIR = Path("data/processed/model_input")
+INPUT_DIRS = {
+    "f1": Path("data/processed/model_input"),
+    "f1_f2": Path("data/processed/model_input"),
+    "f1_f2_f3": Path("data/processed/model_input_f3"),
+}
+INPUT_DIR = INPUT_DIRS["f1_f2"]
 ENCODING_MANIFEST_PATH = Path(
     "artifacts/encoders/encoding_manifest.json"
 )
+F3_FEATURE_MANIFEST_PATH = Path(
+    "results/model_input_f3/feature_manifest.json"
+)
+F1_BINARY_FEATURES = [
+    "price_is_sentinel",
+    "brand_is_missing",
+    "has_profile",
+]
+F1_NUMERIC_FEATURES = ["log_price"]
+PROTOCOL_EXCLUDED_FEATURES = {"day_of_week_idx"}
 
 SPLITS = ("train", "val", "test")
 EXPECTED_ROWS = {
@@ -93,6 +108,12 @@ def parse_args() -> argparse.Namespace:
         help="L2 regularization strength used by SGDClassifier.",
     )
     parser.add_argument(
+        "--eta0",
+        type=float,
+        default=0.005,
+        help="Initial learning rate for constant-rate SGD (default: 0.005).",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=RANDOM_SEED,
@@ -117,12 +138,31 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--feature-set",
+        choices=("f1", "f1_f2", "f1_f2_f3"),
+        default="f1_f2",
+        help=(
+            "Observable-information budget. f1 uses static/context features; "
+            "f1_f2 adds aggregate behavior; f1_f2_f3 additionally uses "
+            "past-only CTR statistics. day_of_week_idx is excluded from all "
+            "three by the fixed experimental protocol."
+        ),
+    )
+    parser.add_argument(
         "--exclude-features",
         nargs="*",
         default=[],
         help=(
             "Encoded feature columns to exclude from this run. "
             "Useful for controlled feature ablations."
+        ),
+    )
+    parser.add_argument(
+        "--evaluate-test",
+        action="store_true",
+        help=(
+            "Evaluate and save predictions for the frozen test split. "
+            "Leave disabled during hyperparameter selection."
         ),
     )
     args = parser.parse_args()
@@ -133,6 +173,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--batch-size must be at least 10,000")
     if args.alpha <= 0:
         parser.error("--alpha must be positive")
+    if args.eta0 <= 0:
+        parser.error("--eta0 must be positive")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
         parser.error(
             "--run-name may contain only letters, numbers, dot, "
@@ -588,18 +630,43 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 
 def train_model(args: argparse.Namespace) -> None:
+    global INPUT_DIR
+    INPUT_DIR = INPUT_DIRS[args.feature_set]
     manifest = load_encoding_manifest()
 
     categorical_features = list(manifest["categorical_features"])
-    binary_features = list(manifest["binary_features"])
-    numeric_features = list(manifest["numeric_features"])
+    if args.feature_set == "f1":
+        binary_features = list(F1_BINARY_FEATURES)
+        numeric_features = list(F1_NUMERIC_FEATURES)
+    else:
+        binary_features = list(manifest["binary_features"])
+        numeric_features = list(manifest["numeric_features"])
+
+    if args.feature_set == "f1_f2_f3":
+        if not F3_FEATURE_MANIFEST_PATH.exists():
+            raise FileNotFoundError(
+                f"Missing {F3_FEATURE_MANIFEST_PATH}. "
+                "Run src/12_build_f3_model_inputs.py first."
+            )
+        with F3_FEATURE_MANIFEST_PATH.open("r", encoding="utf-8") as file:
+            f3_manifest = json.load(file)
+        binary_features.extend(f3_manifest["binary_features"])
+        numeric_features.extend(f3_manifest["numeric_features"])
+
+    duplicate_features = {
+        feature
+        for feature in [*categorical_features, *binary_features, *numeric_features]
+        if [*categorical_features, *binary_features, *numeric_features].count(feature) > 1
+    }
+    if duplicate_features:
+        raise ValueError(f"Duplicate model features: {sorted(duplicate_features)}")
 
     available_features = {
         *categorical_features,
         *binary_features,
         *numeric_features,
     }
-    excluded_features = set(args.exclude_features)
+    excluded_features = set(args.exclude_features) | PROTOCOL_EXCLUDED_FEATURES
     unknown_exclusions = excluded_features - available_features
     if unknown_exclusions:
         raise ValueError(
@@ -671,6 +738,8 @@ def train_model(args: argparse.Namespace) -> None:
     print("OUT-OF-CORE LOGISTIC REGRESSION")
     print("=" * 80)
     print(f"Run:                   {run_name}")
+    print(f"Feature set:           {args.feature_set}")
+    print(f"Input directory:       {INPUT_DIR}")
     print(f"Categorical features:  {len(categorical_features)}")
     print(f"Binary features:       {len(binary_features)}")
     print(f"Numeric features:      {len(numeric_features)}")
@@ -685,7 +754,9 @@ def train_model(args: argparse.Namespace) -> None:
     print(f"Batch size:            {batch_size:,}")
     print(f"Epochs:                {epochs}")
     print(f"L2 alpha:              {args.alpha:g}")
+    print(f"Learning rate eta0:    {args.eta0:g}")
     print("Class weighting:       none (preserves CTR probabilities)")
+    print(f"Evaluate frozen test:  {args.evaluate_test}")
     if args.smoke_test:
         print(f"Smoke train rows:      {max_train_rows:,}")
         print(f"Smoke eval rows:       {max_eval_rows:,}")
@@ -703,7 +774,7 @@ def train_model(args: argparse.Namespace) -> None:
         alpha=args.alpha,
         fit_intercept=True,
         learning_rate="constant",
-        eta0=0.005,
+        eta0=args.eta0,
         random_state=args.seed,
         average=1_000_000,
         class_weight=None,
@@ -848,7 +919,10 @@ def train_model(args: argparse.Namespace) -> None:
     best_scaler: StandardScaler = checkpoint["scaler"]
 
     final_metrics: dict[str, dict] = {}
-    for split_name in ("val", "test"):
+    evaluation_splits = (
+        ("val", "test") if args.evaluate_test else ("val",)
+    )
+    for split_name in evaluation_splits:
         final_metrics[split_name] = evaluate_split(
             model=best_model,
             split_name=split_name,
@@ -869,6 +943,7 @@ def train_model(args: argparse.Namespace) -> None:
     metrics_document = {
         "run_name": run_name,
         "mode": "smoke_test" if args.smoke_test else "full",
+        "feature_set": args.feature_set,
         "best_epoch": best_epoch,
         "selection_metric": "validation_log_loss",
         "hyperparameters": {
@@ -878,13 +953,13 @@ def train_model(args: argparse.Namespace) -> None:
             "loss": "log_loss",
             "penalty": "l2",
             "learning_rate": "constant",
-            "eta0": 0.005,
+            "eta0": args.eta0,
             "average_sgd_start": 1_000_000,
             "class_weight": None,
             "random_seed": args.seed,
         },
         "validation": final_metrics["val"],
-        "test": final_metrics["test"],
+        "test": final_metrics.get("test"),
     }
 
     with (result_dir / "metrics.json").open(
@@ -894,7 +969,7 @@ def train_model(args: argparse.Namespace) -> None:
         json.dump(metrics_document, file, indent=2)
 
     metric_rows = []
-    for split_name in ("val", "test"):
+    for split_name in evaluation_splits:
         metric_rows.append(
             {
                 "model": run_name,
@@ -906,7 +981,9 @@ def train_model(args: argparse.Namespace) -> None:
 
     run_manifest = {
         "run_name": run_name,
+        "feature_set": args.feature_set,
         "input_directory": str(INPUT_DIR),
+        "evaluated_test": args.evaluate_test,
         "encoding_manifest": str(ENCODING_MANIFEST_PATH),
         "model_path": str(best_model_path),
         "prediction_directory": str(prediction_dir),
