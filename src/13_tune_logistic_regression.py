@@ -94,7 +94,6 @@ def read_validation_metrics(name: str) -> dict[str, object]:
         "val_logloss": float(row["log_loss"]),
         "val_pr_auc": float(row["pr_auc"]),
         "val_brier_score": float(row["brier_score"]),
-        "val_actual_ctr": float(row["actual_ctr"]),
         "val_mean_prediction": float(row["mean_prediction"]),
     }
 

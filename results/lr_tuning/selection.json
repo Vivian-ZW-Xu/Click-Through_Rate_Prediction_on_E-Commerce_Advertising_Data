@@ -1,0 +1,31 @@
+{
+  "selection_split": "validation",
+  "test_evaluated": false,
+  "feature_set": "f1_f2_f3",
+  "rule": "highest AUC among configurations within logloss_tolerance of the best validation LogLoss",
+  "logloss_tolerance": 0.0002,
+  "best_validation_logloss": 0.18940663862102045,
+  "near_optimal_configurations": 9,
+  "selected_run": "lr_tune_f123_a1em07_e0p005",
+  "selected_alpha": 1e-07,
+  "selected_eta0": 0.005,
+  "selected_best_epoch": 2,
+  "selected_validation_auc": 0.6551629452993427,
+  "selected_validation_logloss": 0.1894689716959246,
+  "grid": {
+    "alphas": [
+      1e-07,
+      1e-06,
+      1e-05
+    ],
+    "eta0s": [
+      0.001,
+      0.003,
+      0.005,
+      0.01
+    ],
+    "epochs": 3,
+    "batch_size": 200000,
+    "seed": 42
+  }
+}

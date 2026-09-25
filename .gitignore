@@ -40,3 +40,7 @@ results/*_smoke/
 
 # Local per-user evaluation artifacts
 results/*/evaluation/eligible_user_auc.parquet
+
+# Local LR tuning runs
+results/lr_tune_*/
+results/lr_boundary_*/
