@@ -47,3 +47,7 @@ results/lr_boundary_*/
 
 # Local fitted calibration models
 artifacts/calibrators/
+
+# Local LightGBM tuning runs
+results/lgbm_f123_*/
+results/lightgbm_f1_f2_f3_smoke/
