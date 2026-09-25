@@ -1,0 +1,19 @@
+{
+  "run_name": "lr_f1_f2_f3",
+  "splits": [
+    "val",
+    "test"
+  ],
+  "reliability_bins": 10,
+  "gauc_weighting": "impression_count",
+  "cold_start_definition": "raw user/ad ID absent from train-only encoder vocabulary",
+  "prediction_source": "/Users/vivian_hsu/Desktop/2026_Spring/1003/project/final_project/artifacts/predictions/lr_f1_f2_f3",
+  "feature_source": "/Users/vivian_hsu/Desktop/2026_Spring/1003/project/final_project/data/processed/features",
+  "outputs": [
+    "overall_metrics.csv",
+    "gauc_summary.csv",
+    "reliability_bins.csv",
+    "cold_start_metrics.csv",
+    "eligible_user_auc.parquet"
+  ]
+}

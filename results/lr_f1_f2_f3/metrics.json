@@ -1,0 +1,39 @@
+{
+  "run_name": "lr_f1_f2_f3",
+  "mode": "full",
+  "feature_set": "f1_f2_f3",
+  "best_epoch": 2,
+  "selection_metric": "validation_log_loss",
+  "hyperparameters": {
+    "epochs_requested": 3,
+    "batch_size": 200000,
+    "alpha": 1e-07,
+    "loss": "log_loss",
+    "penalty": "l2",
+    "learning_rate": "constant",
+    "eta0": 0.005,
+    "average_sgd_start": 1000000,
+    "class_weight": null,
+    "random_seed": 42
+  },
+  "validation": {
+    "rows": 3234051,
+    "clicks": 159437,
+    "positive_rate": 0.049299469921779214,
+    "mean_prediction": 0.044848211109638214,
+    "auc": 0.6551629452993427,
+    "log_loss": 0.1894689716959246,
+    "pr_auc": 0.08886002402349226,
+    "brier_score": 0.046176936477422714
+  },
+  "test": {
+    "rows": 3308665,
+    "clicks": 166490,
+    "positive_rate": 0.05031938863559774,
+    "mean_prediction": 0.04786226898431778,
+    "auc": 0.6524886941358282,
+    "log_loss": 0.19242856641918987,
+    "pr_auc": 0.08969783652457054,
+    "brier_score": 0.047082677483558655
+  }
+}

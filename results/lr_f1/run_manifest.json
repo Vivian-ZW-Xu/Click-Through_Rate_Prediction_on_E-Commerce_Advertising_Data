@@ -1,0 +1,85 @@
+{
+  "run_name": "lr_f1",
+  "feature_set": "f1",
+  "input_directory": "data/processed/model_input",
+  "evaluated_test": true,
+  "encoding_manifest": "artifacts/encoders/encoding_manifest.json",
+  "model_path": "artifacts/models/lr_f1/best_model.joblib",
+  "prediction_directory": "artifacts/predictions/lr_f1",
+  "feature_layout": {
+    "categorical_offsets": {
+      "user_idx": 0,
+      "adgroup_idx": 1006339,
+      "pid_idx": 1762317,
+      "cate_idx": 1762321,
+      "campaign_idx": 1768955,
+      "customer_idx": 2161299,
+      "brand_idx": 2401640,
+      "cms_segid_idx": 2496800,
+      "cms_group_idx": 2496899,
+      "gender_idx": 2496914,
+      "age_idx": 2496918,
+      "pvalue_idx": 2496927,
+      "shopping_idx": 2496932,
+      "occupation_idx": 2496937,
+      "new_user_class_idx": 2496941,
+      "hour_idx": 2496947
+    },
+    "categorical_dimension": 2496973,
+    "dense_offsets": {
+      "price_is_sentinel": 2496973,
+      "brand_is_missing": 2496974,
+      "has_profile": 2496975,
+      "log_price": 2496976
+    },
+    "dense_features": [
+      "price_is_sentinel",
+      "brand_is_missing",
+      "has_profile",
+      "log_price"
+    ],
+    "total_dimension": 2496977
+  },
+  "categorical_features": [
+    "user_idx",
+    "adgroup_idx",
+    "pid_idx",
+    "cate_idx",
+    "campaign_idx",
+    "customer_idx",
+    "brand_idx",
+    "cms_segid_idx",
+    "cms_group_idx",
+    "gender_idx",
+    "age_idx",
+    "pvalue_idx",
+    "shopping_idx",
+    "occupation_idx",
+    "new_user_class_idx",
+    "hour_idx"
+  ],
+  "binary_features": [
+    "price_is_sentinel",
+    "brand_is_missing",
+    "has_profile"
+  ],
+  "numeric_features": [
+    "log_price"
+  ],
+  "excluded_features": [
+    "day_of_week_idx"
+  ],
+  "numeric_scaler_mean": [
+    5.100763720821668
+  ],
+  "numeric_scaler_scale": [
+    1.295137631871717
+  ],
+  "versions": {
+    "python": "3.11.15",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "scikit_learn": "1.8.0",
+    "pyarrow": "24.0.0"
+  }
+}
