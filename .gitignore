@@ -37,3 +37,6 @@ results/*_smoke/
 
 # Local legacy backups
 *_old_pre*
+
+# Local per-user evaluation artifacts
+results/*/evaluation/eligible_user_auc.parquet
