@@ -33,7 +33,7 @@ checkpoints/
 *.npy
 
 # Temporary experiment outputs
-results/logistic_regression_smoke/
+results/*_smoke/
 
 # Local legacy backups
 *_old_pre*

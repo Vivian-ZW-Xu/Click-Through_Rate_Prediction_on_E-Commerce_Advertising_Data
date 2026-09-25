@@ -95,6 +95,6 @@ See [`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) for the fix
 
 ## Current Status
 
-The point-in-time preprocessing and common tabular model-input pipeline are complete. The current phase is stabilizing the LR baseline before building the shared evaluator and past-only CTR features.
+The point-in-time preprocessing and common tabular model-input pipeline are complete. The LR baseline has been stabilized: the discrete weekday feature was removed because the validation weekday was absent from training. The next phase builds the shared evaluator, followed by past-only CTR features.
 
 Previous outputs are preserved on the `archive/v1-original` branch and are not used as evidence for this rebuilt pipeline.

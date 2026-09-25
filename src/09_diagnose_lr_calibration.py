@@ -1,18 +1,32 @@
+import argparse
+import re
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 
 
-PRED_DIR = Path(
-    "artifacts/predictions/logistic_regression"
-)
 FEATURE_DIR = Path(
     "data/processed/features"
 )
-OUTPUT_DIR = Path(
-    "results/logistic_regression/calibration_diagnostics"
-)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Diagnose LR probability calibration by traffic slice."
+    )
+    parser.add_argument(
+        "--run-name",
+        default="logistic_regression",
+        help="Run name used by src/08_train_logistic_regression.py.",
+    )
+    args = parser.parse_args()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
+        parser.error(
+            "--run-name may contain only letters, numbers, dot, "
+            "underscore, and hyphen"
+        )
+    return args
 
 
 def summarize(
@@ -67,9 +81,10 @@ def summarize(
 
 def load_split(
     split: str,
+    prediction_dir: Path,
 ) -> pl.DataFrame:
     predictions = pl.read_parquet(
-        PRED_DIR
+        prediction_dir
         / f"{split}_predictions.parquet"
     )
 
@@ -127,15 +142,20 @@ def load_split(
 
 
 def main() -> None:
+    args = parse_args()
+    prediction_dir = Path("artifacts/predictions") / args.run_name
+    output_dir = Path("results") / args.run_name / "calibration_diagnostics"
+
     print("=" * 74)
     print("LR CALIBRATION DIAGNOSTICS")
     print("=" * 74)
+    print(f"Run:  {args.run_name}")
     print(
         "COPC = actual CTR / mean prediction; "
         "the ideal value is 1.0."
     )
 
-    OUTPUT_DIR.mkdir(
+    output_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
@@ -148,7 +168,7 @@ def main() -> None:
     for split in ("val", "test"):
         print(f"Loading {split}...")
 
-        data = load_split(split)
+        data = load_split(split, prediction_dir)
 
         overall_tables.append(
             summarize(
@@ -198,19 +218,19 @@ def main() -> None:
     )
 
     overall.write_csv(
-        OUTPUT_DIR / "overall.csv"
+        output_dir / "overall.csv"
     )
 
     hourly.write_csv(
-        OUTPUT_DIR / "by_hour.csv"
+        output_dir / "by_hour.csv"
     )
 
     by_pid.write_csv(
-        OUTPUT_DIR / "by_pid.csv"
+        output_dir / "by_pid.csv"
     )
 
     deciles.write_csv(
-        OUTPUT_DIR / "by_decile.csv"
+        output_dir / "by_decile.csv"
     )
 
     with pl.Config(
@@ -230,7 +250,7 @@ def main() -> None:
 
     print(
         f"\nSaved diagnostic tables to: "
-        f"{OUTPUT_DIR}"
+        f"{output_dir}"
     )
 
 

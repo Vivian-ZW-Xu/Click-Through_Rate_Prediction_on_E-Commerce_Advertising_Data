@@ -21,6 +21,7 @@ import argparse
 import csv
 import json
 import platform
+import re
 import time
 from pathlib import Path
 from typing import Iterator
@@ -106,6 +107,24 @@ def parse_args() -> argparse.Namespace:
             f"{SMOKE_EVAL_ROWS:,} rows per evaluation split."
         ),
     )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default="logistic_regression",
+        help=(
+            "Output name under results/, artifacts/models/, and "
+            "artifacts/predictions/."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-features",
+        nargs="*",
+        default=[],
+        help=(
+            "Encoded feature columns to exclude from this run. "
+            "Useful for controlled feature ablations."
+        ),
+    )
     args = parser.parse_args()
 
     if args.epochs < 1:
@@ -114,6 +133,11 @@ def parse_args() -> argparse.Namespace:
         parser.error("--batch-size must be at least 10,000")
     if args.alpha <= 0:
         parser.error("--alpha must be positive")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
+        parser.error(
+            "--run-name may contain only letters, numbers, dot, "
+            "underscore, and hyphen"
+        )
 
     return args
 
@@ -569,6 +593,35 @@ def train_model(args: argparse.Namespace) -> None:
     categorical_features = list(manifest["categorical_features"])
     binary_features = list(manifest["binary_features"])
     numeric_features = list(manifest["numeric_features"])
+
+    available_features = {
+        *categorical_features,
+        *binary_features,
+        *numeric_features,
+    }
+    excluded_features = set(args.exclude_features)
+    unknown_exclusions = excluded_features - available_features
+    if unknown_exclusions:
+        raise ValueError(
+            "Cannot exclude unknown model features: "
+            f"{sorted(unknown_exclusions)}"
+        )
+
+    categorical_features = [
+        feature
+        for feature in categorical_features
+        if feature not in excluded_features
+    ]
+    binary_features = [
+        feature
+        for feature in binary_features
+        if feature not in excluded_features
+    ]
+    numeric_features = [
+        feature
+        for feature in numeric_features
+        if feature not in excluded_features
+    ]
     vocabulary_sizes = {
         key: int(value)
         for key, value in manifest["vocabulary_sizes"].items()
@@ -585,9 +638,9 @@ def train_model(args: argparse.Namespace) -> None:
     validate_inputs(model_columns, smoke_test=args.smoke_test)
 
     run_name = (
-        "logistic_regression_smoke"
+        f"{args.run_name}_smoke"
         if args.smoke_test
-        else "logistic_regression"
+        else args.run_name
     )
     result_dir = Path("results") / run_name
     model_dir = Path("artifacts/models") / run_name
@@ -621,6 +674,10 @@ def train_model(args: argparse.Namespace) -> None:
     print(f"Categorical features:  {len(categorical_features)}")
     print(f"Binary features:       {len(binary_features)}")
     print(f"Numeric features:      {len(numeric_features)}")
+    print(
+        "Excluded features:     "
+        f"{sorted(excluded_features) if excluded_features else 'none'}"
+    )
     print(
         f"Sparse dimensions:     "
         f"{feature_layout['total_dimension']:,}"
@@ -840,7 +897,7 @@ def train_model(args: argparse.Namespace) -> None:
     for split_name in ("val", "test"):
         metric_rows.append(
             {
-                "model": "logistic_regression",
+                "model": run_name,
                 "split": split_name,
                 **final_metrics[split_name],
             }
@@ -857,6 +914,7 @@ def train_model(args: argparse.Namespace) -> None:
         "categorical_features": categorical_features,
         "binary_features": binary_features,
         "numeric_features": numeric_features,
+        "excluded_features": sorted(excluded_features),
         "numeric_scaler_mean": best_scaler.mean_.tolist(),
         "numeric_scaler_scale": best_scaler.scale_.tolist(),
         "versions": {
