@@ -44,3 +44,6 @@ results/*/evaluation/eligible_user_auc.parquet
 # Local LR tuning runs
 results/lr_tune_*/
 results/lr_boundary_*/
+
+# Local fitted calibration models
+artifacts/calibrators/

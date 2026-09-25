@@ -1,0 +1,19 @@
+{
+  "run_name": "lr_f1_f2_f3",
+  "selected_method": "isotonic",
+  "selection_rule": "lowest LogLoss on deterministic validation holdout",
+  "selection_folds": 5,
+  "calibration_fit_rows": 2587967,
+  "selection_rows": 646084,
+  "full_validation_refit_rows": 3234051,
+  "frozen_test_rows": 3308665,
+  "ece_bins": 20,
+  "probability_clip": 1e-07,
+  "calibrator_path": "artifacts/calibrators/lr_f1_f2_f3/isotonic.joblib",
+  "versions": {
+    "python": "3.11.15",
+    "numpy": "2.4.4",
+    "polars": "1.40.1",
+    "scikit_learn": "1.8.0"
+  }
+}
