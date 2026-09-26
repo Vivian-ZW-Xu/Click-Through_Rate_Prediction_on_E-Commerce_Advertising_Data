@@ -45,6 +45,7 @@ SMOKE_TRAIN_ROWS = 300_000
 SMOKE_EVAL_ROWS = 150_000
 SMOKE_BATCH_SIZE = 4_096
 SMOKE_EPOCHS = 1
+UNKNOWN_INDEX = 1
 
 
 def parse_args() -> argparse.Namespace:
@@ -258,10 +259,20 @@ class TabularCTRModel(nn.Module):
         super().__init__()
         self.model_type = model_type
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(size, embedding_dim) for size in vocabulary_sizes]
+            [
+                nn.Embedding(
+                    size,
+                    embedding_dim,
+                    padding_idx=UNKNOWN_INDEX,
+                )
+                for size in vocabulary_sizes
+            ]
         )
         self.first_order = nn.ModuleList(
-            [nn.Embedding(size, 1) for size in vocabulary_sizes]
+            [
+                nn.Embedding(size, 1, padding_idx=UNKNOWN_INDEX)
+                for size in vocabulary_sizes
+            ]
         )
         self.wide_dense = nn.Linear(dense_dimension, 1)
 
@@ -284,6 +295,13 @@ class TabularCTRModel(nn.Module):
     def _reset_parameters(self) -> None:
         for embedding in self.embeddings:
             nn.init.normal_(embedding.weight, mean=0.0, std=0.01)
+            # Index 1 is reserved for categories unseen in training. Because
+            # that index cannot occur in the training split, leaving it at a
+            # random initialization would make cold-start predictions depend
+            # on an untrained vector. Zero is the neutral representation.
+            if embedding.num_embeddings > UNKNOWN_INDEX:
+                with torch.no_grad():
+                    embedding.weight[UNKNOWN_INDEX].zero_()
         for embedding in self.first_order:
             nn.init.zeros_(embedding.weight)
         nn.init.zeros_(self.wide_dense.bias)
@@ -318,6 +336,19 @@ class TabularCTRModel(nn.Module):
 
 def parameter_count(model: nn.Module) -> int:
     return sum(parameter.numel() for parameter in model.parameters())
+
+
+def validate_neutral_unknown_embeddings(model: TabularCTRModel) -> None:
+    """Assert that every reserved UNKNOWN row remains exactly neutral."""
+    with torch.no_grad():
+        tables = [*model.embeddings, *model.first_order]
+        for table_index, embedding in enumerate(tables):
+            unknown_row = embedding.weight[UNKNOWN_INDEX]
+            if torch.count_nonzero(unknown_row).item() != 0:
+                raise AssertionError(
+                    "Reserved UNKNOWN embedding row is not zero: "
+                    f"table={table_index}, index={UNKNOWN_INDEX}"
+                )
 
 
 def validate_category_ranges(
@@ -551,6 +582,7 @@ def main() -> None:
         hidden_dims=args.hidden_dims,
         dropout=args.dropout,
     ).to(device)
+    validate_neutral_unknown_embeddings(model)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.learning_rate,
@@ -587,6 +619,7 @@ def main() -> None:
             device=device,
             seed=args.seed + epoch,
         )
+        validate_neutral_unknown_embeddings(model)
         _, val_labels, val_predictions = predict_split(
             model,
             "val",
@@ -709,6 +742,7 @@ def main() -> None:
         "weight_decay": args.weight_decay,
         "seed": args.seed,
         "class_weighting": "none",
+        "unknown_embedding_policy": "reserved index 1 fixed at zero initialization",
         "evaluate_test": args.evaluate_test,
         "smoke_test": args.smoke_test,
         "train_limit": train_limit,
