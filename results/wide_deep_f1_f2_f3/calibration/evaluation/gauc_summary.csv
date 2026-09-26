@@ -1,0 +1,2 @@
+split,gauc,total_users,eligible_users,eligible_user_rate,total_rows,eligible_rows,eligible_row_coverage,weighting
+test,0.5694575203945885,391741,104884,0.26773812289242127,3308665,1682247,0.5084367864380347,impression_count

@@ -44,6 +44,15 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Number of equal-count reliability bins (default: 10).",
     )
+    parser.add_argument(
+        "--prediction-stage",
+        choices=("raw", "calibrated"),
+        default="raw",
+        help=(
+            "Evaluate raw model predictions (default) or the calibrated "
+            "frozen-test predictions produced by src/14_calibrate_predictions.py."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -83,8 +92,22 @@ def metric_row(split: str, segment: str, frame: pl.DataFrame) -> dict[str, objec
     }
 
 
-def load_and_validate(split: str, run_name: str) -> pl.DataFrame:
-    prediction_path = PREDICTION_ROOT / run_name / f"{split}_predictions.parquet"
+def load_and_validate(
+    split: str,
+    run_name: str,
+    prediction_stage: str,
+) -> pl.DataFrame:
+    if prediction_stage == "calibrated":
+        prediction_path = (
+            PREDICTION_ROOT
+            / run_name
+            / "calibration"
+            / f"{split}_predictions.parquet"
+        )
+        prediction_column = "calibrated_prediction"
+    else:
+        prediction_path = PREDICTION_ROOT / run_name / f"{split}_predictions.parquet"
+        prediction_column = "prediction"
     feature_path = FEATURE_DIR / f"{split}.parquet"
     if not prediction_path.exists():
         raise FileNotFoundError(f"Missing predictions: {prediction_path}")
@@ -94,7 +117,7 @@ def load_and_validate(split: str, run_name: str) -> pl.DataFrame:
     predictions = pl.read_parquet(prediction_path).select(
         pl.col("impression_id"),
         pl.col("clk").alias("prediction_clk"),
-        pl.col("prediction").cast(pl.Float64),
+        pl.col(prediction_column).cast(pl.Float64).alias("prediction"),
     )
     if predictions["impression_id"].n_unique() != predictions.height:
         raise ValueError(f"{split}: duplicate impression_id values in predictions")
@@ -301,13 +324,21 @@ def weighted_ece(reliability: pl.DataFrame) -> float:
 def main() -> None:
     args = parse_args()
     validate_args(args)
-    output_dir = RESULT_ROOT / args.run_name / "evaluation"
+    if args.prediction_stage == "calibrated":
+        output_dir = RESULT_ROOT / args.run_name / "calibration" / "evaluation"
+        splits = ("test",)
+        prediction_source = PREDICTION_ROOT / args.run_name / "calibration"
+    else:
+        output_dir = RESULT_ROOT / args.run_name / "evaluation"
+        splits = SPLITS
+        prediction_source = PREDICTION_ROOT / args.run_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 78)
     print("SHARED CTR EVALUATION")
     print("=" * 78)
     print(f"Run:  {args.run_name}")
+    print(f"Prediction stage: {args.prediction_stage}")
 
     overall_rows: list[dict[str, object]] = []
     gauc_rows: list[dict[str, object]] = []
@@ -315,9 +346,13 @@ def main() -> None:
     cold_start_tables: list[pl.DataFrame] = []
     per_user_tables: list[pl.DataFrame] = []
 
-    for split in SPLITS:
+    for split in splits:
         print(f"\nLoading and validating {split}...")
-        frame = load_and_validate(split, args.run_name)
+        frame = load_and_validate(
+            split,
+            args.run_name,
+            args.prediction_stage,
+        )
         overall = metric_row(split, "overall", frame)
         reliability = build_reliability(split, frame, args.bins)
         gauc_summary, per_user = build_gauc(split, frame)
@@ -353,11 +388,12 @@ def main() -> None:
 
     manifest = {
         "run_name": args.run_name,
-        "splits": list(SPLITS),
+        "prediction_stage": args.prediction_stage,
+        "splits": list(splits),
         "reliability_bins": args.bins,
         "gauc_weighting": "impression_count",
         "cold_start_definition": "raw user/ad ID absent from train-only encoder vocabulary",
-        "prediction_source": str(PREDICTION_ROOT / args.run_name),
+        "prediction_source": str(prediction_source),
         "feature_source": str(FEATURE_DIR),
         "outputs": [
             "overall_metrics.csv",

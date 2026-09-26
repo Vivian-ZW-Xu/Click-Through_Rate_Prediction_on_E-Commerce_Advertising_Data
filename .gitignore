@@ -55,3 +55,6 @@ results/lightgbm_f1_f2_f3_smoke/
 # Local neural tuning runs
 results/wide_deep_f123_*/
 results/deepfm_f123_*/
+
+# Local calibrated per-user evaluation artifacts
+results/*/calibration/evaluation/eligible_user_auc.parquet
