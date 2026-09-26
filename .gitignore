@@ -51,3 +51,7 @@ artifacts/calibrators/
 # Local LightGBM tuning runs
 results/lgbm_f123_*/
 results/lightgbm_f1_f2_f3_smoke/
+
+# Local neural tuning runs
+results/wide_deep_f123_*/
+results/deepfm_f123_*/
